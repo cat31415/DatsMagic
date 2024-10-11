@@ -34,9 +34,40 @@ type Bounty struct {
 	Points int     `json:"points"`
 }
 
-// Structure for game state
-type GameState struct {
-	Carpets   []Carpet  `json:"carpets"`
-	Anomalies []Anomaly `json:"anomalies"`
-	Bounties  []Bounty  `json:"bounties"`
+// Structure for enemies
+type Enemy struct {
+	X      int    `json:"x"`
+	Y      int    `json:"y"`
+	Health int    `json:"health"`
+	Status string `json:"status"`
+}
+
+// Структуры для отправки запроса
+type PlayerCommand struct {
+	Transports []TransportCommand `json:"transports"`
+}
+
+type TransportCommand struct {
+	ID             string `json:"id,omitempty"`
+	Acceleration   Vector `json:"acceleration,omitempty"`
+	ActivateShield bool   `json:"activateShield,omitempty"`
+	Attack         Vector `json:"attack,omitempty"`
+}
+
+// Структура для получения ответа (здесь добавь поля, которые ожидаешь получить)
+type MoveResponse struct {
+	Name      string     `json:"name"`
+	X         int        `json:"x"`
+	Y         int        `json:"y"`
+	Health    int        `json:"health"`
+	Carpets   []Carpet   `json:"transports"`
+	Anomalies []Anomaly  `json:"anomalies"`
+	Bounties  []Bounty   `json:"bounties"`
+	Enemies   []Enemy    `json:"enemies"`
+	MapSize   Coordinate `json:"mapSize"`
+}
+
+type Coordinate struct {
+	X int `json:"x"`
+	Y int `json:"y"`
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"sync"
@@ -95,24 +94,8 @@ func moveAwayFrom(carpet *Carpet, targetX, targetY float64) {
 	}
 }
 
-// Функция для запроса состояния игры
-func getGameState() (*GameState, error) {
-	resp, err := apiRequest("GET", "/play/magcarp/player/move", nil) // Реализуйте apiRequest
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var state GameState
-	if err := json.NewDecoder(resp.Body).Decode(&state); err != nil {
-		return nil, err
-	}
-
-	return &state, nil
-}
-
 // Функция для обработки состояния игры
-func processGameState(state *GameState, wg *sync.WaitGroup) {
+func processGameState(state *MoveResponse, wg *sync.WaitGroup) {
 	defer wg.Done()
 	var wgCarpet sync.WaitGroup
 
@@ -138,7 +121,7 @@ func runBot() {
 		select {
 		case <-ticker.C:
 			wg.Add(1)
-			state, err := getGameState() // Получаем состояние игры
+			state, err := getInitialState() // Получаем состояние игры
 			if err != nil {
 				fmt.Println("Error getting game state:", err)
 				continue // Пропускаем итерацию при ошибке
