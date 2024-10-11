@@ -2,12 +2,14 @@ package main
 
 // Structure to represent the bot's carpet
 type Carpet struct {
-	ID       string  `json:"id"`
-	X        float64 `json:"x"`
-	Y        float64 `json:"y"`
-	Health   int     `json:"health"`
-	Velocity Vector  `json:"velocity"`
-	Shield   bool    `json:"shield"`
+	ID                  string  `json:"id"`
+	X                   float64 `json:"x"`
+	Y                   float64 `json:"y"`
+	Health              int     `json:"health"`
+	Velocity            Vector  `json:"velocity"`
+	AnomalyAcceleration Vector  `json:"anomalyAcceleration"`
+	SelfAcceleration    Vector  `json:"selfAcceleration"`
+	Shield              bool    `json:"shield"`
 }
 
 // Structure for vector representation
