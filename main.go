@@ -12,10 +12,15 @@ func main() {
 		log.Fatalf("Ошибка при получении начального состояния: %v", err)
 	}
 
+	// Сохраняем состояние в файл "game_state.json"
+	if err := saveStateToJSON(state, "game_state.json"); err != nil {
+		log.Fatalf("Ошибка при сохранении состояния: %v", err)
+	}
+
 	fmt.Printf("Игрок %s находится на координатах X=%d, Y=%d\n", state.Name, state.X, state.Y)
 	fmt.Printf("Здоровье игрока: %d\n", state.Health)
 	fmt.Println("Доступные транспорты:")
-	for _, transport := range state.Transports {
+	for _, transport := range state.Carpets {
 		fmt.Printf("Транспорт ID=%s на координатах X=%d, Y=%d, здоровье: %d\n", transport.ID, transport.X, transport.Y, transport.Health)
 	}
 	fmt.Println("Аномалии на карте:")
