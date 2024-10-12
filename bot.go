@@ -79,7 +79,7 @@ func attackEnemies(carpet *Carpet, enemies []Enemy, attackRadius float64) (Vecto
 
 	// Если есть враг с минимальным здоровьем, атакуем
 	if weakestEnemy != nil {
-		fmt.Printf("Carpet %s attacking enemy with health %d at distance %.2f\n", carpet.ID, weakestEnemy.Health, minHealth)
+		//fmt.Printf("Carpet %s attacking enemy with health %d at distance %.2f\n", carpet.ID, weakestEnemy.Health, minHealth)
 
 		attackVector = Vector{X: weakestEnemy.X, Y: weakestEnemy.Y}
 
@@ -152,14 +152,53 @@ func avoidAnomalies(carpet *Carpet, anomalies []Anomaly) Vector {
 // Функция для сбора наград
 func collectBounties(carpet *Carpet, bounties []Bounty) Vector {
 	var totalSelfAcceleration Vector
+	var closestBounty *Bounty
+	minDistance := math.MaxFloat64 // Начальное значение для минимального расстояния
 
+	// Поиск ближайшей монеты
 	for _, bounty := range bounties {
-		if math.Abs(carpet.X-bounty.X) < 1 && math.Abs(carpet.Y-bounty.Y) < 1 {
-			fmt.Printf("Carpet %s collected bounty at (%f, %f)\n", carpet.ID, bounty.X, bounty.Y)
+		dx := carpet.X - bounty.X
+		dy := carpet.Y - bounty.Y
+		distance := math.Sqrt(dx*dx + dy*dy)
+
+		// Проверяем, есть ли монета ближе, чем предыдущая
+		if distance < minDistance {
+			minDistance = distance
+			closestBounty = &bounty // Сохраняем ближайшую монету
+		}
+	}
+
+	// Если нашли ближайшую монету, рассчитываем ускорение
+	if closestBounty != nil {
+		// Проверяем, достигли ли мы монеты
+		if minDistance < 1 { // Порог для "собрания" монеты
+			fmt.Printf("Carpet %s collected bounty at (%f, %f)\n", carpet.ID, closestBounty.X, closestBounty.Y)
 		} else {
-			acceleration := calculateAcceleration(carpet, bounty.X, bounty.Y)
-			totalSelfAcceleration.X += acceleration.X
-			totalSelfAcceleration.Y += acceleration.Y
+			// Рассчитываем желаемое ускорение к ближайшей монете
+			desiredAcceleration := calculateAcceleration(carpet, closestBounty.X, closestBounty.Y)
+
+			// Рассчитываем текущее направление
+			currentVelocity := Vector{X: carpet.Velocity.X, Y: carpet.Velocity.Y}
+			currentSpeed := math.Sqrt(currentVelocity.X*currentVelocity.X + currentVelocity.Y*currentVelocity.Y)
+
+			// Нормализуем текущее направление
+			if currentSpeed > 0 {
+				direction := Vector{X: currentVelocity.X / currentSpeed, Y: currentVelocity.Y / currentSpeed}
+
+				// Отклоняем желаемое ускорение в сторону текущего направления
+				adjustedAcceleration := Vector{
+					X: desiredAcceleration.X - direction.X*(desiredAcceleration.X*direction.X+desiredAcceleration.Y*direction.Y),
+					Y: desiredAcceleration.Y - direction.Y*(desiredAcceleration.X*direction.X+desiredAcceleration.Y*direction.Y),
+				}
+
+				// Добавляем скорректированное ускорение к общему ускорению
+				totalSelfAcceleration.X += adjustedAcceleration.X
+				totalSelfAcceleration.Y += adjustedAcceleration.Y
+			} else {
+				// Если ковер стоит на месте, просто добавляем желаемое ускорение
+				totalSelfAcceleration.X += desiredAcceleration.X
+				totalSelfAcceleration.Y += desiredAcceleration.Y
+			}
 		}
 	}
 
@@ -168,21 +207,29 @@ func collectBounties(carpet *Carpet, bounties []Bounty) Vector {
 
 // Функция для управления коврами
 func manageCarpet(carpet *Carpet, bounties []Bounty, anomalies []Anomaly, enemies []Enemy, attackRange int) (Vector, Vector, bool) {
+
 	// Сбор наград
 	bountyVector := collectBounties(carpet, bounties)
 
 	// Уклонение от аномалий
-	avoidanceVector := avoidAnomalies(carpet, anomalies)
+	//avoidanceVector := avoidAnomalies(carpet, anomalies)
 
 	// Атака на врагов и активация щита
 	attackVector, activateShield := attackEnemies(carpet, enemies, float64(attackRange))
+	var finalAcceleration Vector
+	// if carpet.AnomalyAcceleration.X != 0 || carpet.AnomalyAcceleration.Y != 0 {
+	// 	fmt.Println("Carpet", carpet.ID, "is using anomaly acceleration")
+	// 	finalAcceleration = Vector{
+	// 		X: avoidanceVector.X,
+	// 		Y: avoidanceVector.Y,
+	// 	}
+	// } else {
 
-	// Суммируем оба вектора
-	finalAcceleration := Vector{
-		X: bountyVector.X + avoidanceVector.X,
-		Y: bountyVector.Y + avoidanceVector.Y,
+	// }
+	finalAcceleration = Vector{
+		X: bountyVector.X,
+		Y: bountyVector.Y,
 	}
-
 	// Рассчитываем длину итогового вектора
 	length := math.Sqrt(finalAcceleration.X*finalAcceleration.X + finalAcceleration.Y*finalAcceleration.Y)
 
