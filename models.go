@@ -10,7 +10,7 @@ type Carpet struct {
 	Velocity            Vector `json:"velocity"`
 	AnomalyAcceleration Vector `json:"anomalyAcceleration"`
 	SelfAcceleration    Vector `json:"selfAcceleration"`
-	Shield              bool   `json:"shield"`
+	Shield              bool   `json:"activateShield"`
 }
 
 // Structure for vector representation

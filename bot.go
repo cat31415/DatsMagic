@@ -7,14 +7,15 @@ import (
 )
 
 // Функция для обновления состояния всех ковров
-func updateCarpets(carpets []Carpet, accelerations []Vector, attacks []Vector) (*MoveResponse, error) {
+func updateCarpets(carpets []Carpet, accelerations []Vector, attacks []Vector, shields []bool) (*MoveResponse, error) {
 	req := PlayerCommand{Transports: []TransportCommand{}}
 
 	for i, carpet := range carpets {
 		// Добавляем команду для ковра с учетом ускорения и атаки
 		req.Transports = append(req.Transports, TransportCommand{
-			ID:           carpet.ID,
-			Acceleration: accelerations[i],
+			ID:             carpet.ID,
+			Acceleration:   accelerations[i],
+			ActivateShield: shields[i],
 		})
 		if attacks[i].X != 0 || attacks[i].Y != 0 {
 			req.Transports[i].Attack = attacks[i]
@@ -25,10 +26,11 @@ func updateCarpets(carpets []Carpet, accelerations []Vector, attacks []Vector) (
 	return sendPlayerCommand(req)
 }
 
-// Функция для атаки на соперников
-func attackEnemies(carpet *Carpet, enemies []Carpet, attackRadius float64, wg *sync.WaitGroup, attackResults chan Vector) {
+// Функция для атаки на соперников с предсказанием и активацией щита
+func attackEnemies(carpet *Carpet, enemies []Carpet, attackRadius float64, wg *sync.WaitGroup, attackResults chan Vector, shieldResults chan bool) {
 	defer wg.Done()
 	attackVector := Vector{X: 0, Y: 0} // По умолчанию атака не происходит
+	activateShield := false            // По умолчанию щит не активируется
 
 	var closestEnemy *Carpet
 	var minDistance float64 = attackRadius + 1 // Минимальная дистанция для выбора цели
@@ -41,9 +43,27 @@ func attackEnemies(carpet *Carpet, enemies []Carpet, attackRadius float64, wg *s
 		distance := math.Sqrt(dx*dx + dy*dy)
 
 		// Проверяем, находится ли враг в радиусе атаки
-		if distance != 0 && distance <= attackRadius && distance < minDistance {
+		if distance <= attackRadius && distance < minDistance {
 			minDistance = distance
 			closestEnemy = &enemy
+		} else {
+			// Предсказание будущей позиции врага через 1 секунду
+			predictedEnemyX := enemy.X + enemy.Velocity.X*1 // Позиция через 1 секунду
+			predictedEnemyY := enemy.Y + enemy.Velocity.Y*1
+
+			// Предсказание вашей позиции через 1 секунду
+			predictedCarpetX := carpet.X + carpet.Velocity.X*1 + carpet.MaxAccel*1 // Позиция через 1 секунду
+			predictedCarpetY := carpet.Y + carpet.Velocity.Y*1 + carpet.MaxAccel*1
+
+			// Рассчитываем расстояние до предсказанной позиции врага
+			predictedDx := predictedCarpetX - predictedEnemyX
+			predictedDy := predictedCarpetY - predictedEnemyY
+			predictedDistance := math.Sqrt(predictedDx*predictedDx + predictedDy*predictedDy)
+
+			// Если предсказанная дистанция меньше радиуса атаки, активируем щит
+			if predictedDistance <= attackRadius {
+				activateShield = true
+			}
 		}
 	}
 
@@ -66,6 +86,9 @@ func attackEnemies(carpet *Carpet, enemies []Carpet, attackRadius float64, wg *s
 
 	// Отправляем вектор атаки в канал
 	attackResults <- attackVector
+
+	// Отправляем результат активации щита в канал
+	shieldResults <- activateShield
 }
 
 // Функция для расчета ускорения на основе целевой точки
@@ -146,7 +169,7 @@ func moveAwayFrom(carpet *Carpet, targetX, targetY float64) Vector {
 }
 
 // Функция для управления коврами
-func manageCarpet(carpet *Carpet, bounties []Bounty, anomalies []Anomaly, enemies []Carpet, wg *sync.WaitGroup, results chan Vector, attackResults chan Vector) {
+func manageCarpet(carpet *Carpet, bounties []Bounty, anomalies []Anomaly, enemies []Carpet, wg *sync.WaitGroup, results chan Vector, attackResults chan Vector, shields chan bool) {
 	wg.Add(3) // Увеличиваем счетчик горутин для атаки
 
 	// Горутин для сбора наград
@@ -156,7 +179,7 @@ func manageCarpet(carpet *Carpet, bounties []Bounty, anomalies []Anomaly, enemie
 	go avoidAnomalies(carpet, anomalies, wg, results)
 
 	// Горутин для атаки на соперников
-	go attackEnemies(carpet, enemies, 30.0, wg, attackResults) // Радиус атаки, например, 5 метров
+	go attackEnemies(carpet, enemies, 30.0, wg, attackResults, shields) // Радиус атаки, например, 5 метров
 }
 
 // Основная функция бота
@@ -166,22 +189,26 @@ func runBot(state *MoveResponse) *MoveResponse {
 	results := make(chan Vector, len(state.Carpets))       // Канал для ускорений
 	attackResults := make(chan Vector, len(state.Carpets)) // Канал для векторов атак
 
+	shieldResults := make(chan bool, len(state.Carpets)) // Канал для активации щита
 	for _, carpet := range state.Carpets {
 		carpet.MaxAccel = state.MaxAccel
-		manageCarpet(&carpet, state.Bounties, state.Anomalies, state.Carpets, &wg, results, attackResults)
+		manageCarpet(&carpet, state.Bounties, state.Anomalies, state.Carpets, &wg, results, attackResults, shieldResults)
 	}
 
 	wg.Wait()            // Ждем завершения всех горутин
 	close(results)       // Закрываем канал для ускорений
 	close(attackResults) // Закрываем канал для атак
+	close(shieldResults) // Закрываем канал для щитов
 
 	// Сбор итоговых результатов
 	accelerations := make([]Vector, len(state.Carpets))
 	attacks := make([]Vector, len(state.Carpets)) // Список для хранения векторов атак
+	shields := make([]bool, len(state.Carpets))   // Список для хранения состояний щита
 
 	for i := range state.Carpets {
 		accelerations[i] = <-results
 		attacks[i] = <-attackResults
+		shields[i] = <-shieldResults
 	}
 	// Передаем вектора атак и ускорений в функцию sendPlayerCommand
 	res, err := updateCarpets(state.Carpets, accelerations, attacks)

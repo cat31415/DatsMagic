@@ -7,15 +7,13 @@ import (
 )
 
 func main() {
-	ticker := time.NewTicker(1 * time.Second / 3) // создаем тикер для выполнения запроса 3 раза в секунду
-	defer ticker.Stop()
 
 	counter := 1
 	state, err := sendPlayerCommand(PlayerCommand{[]TransportCommand{}})
 	if err != nil {
 		fmt.Println("err 429")
 	}
-
+	time.Sleep(time.Second / 2)
 	interval := time.Second * 3
 	// Таймер для отсчета времени
 	maxRequests := 8
