@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"math"
-	"sync"
 )
 
 // Функция для обновления состояния всех ковров
@@ -15,8 +14,10 @@ func updateCarpets(carpets []Carpet, accelerations []Vector, attacks []Vector, s
 		req.Transports = append(req.Transports, TransportCommand{
 			ID:             carpet.ID,
 			Acceleration:   accelerations[i],
-			ActivateShield: shields[i],
+			ActivateShield: shields[i], // Указываем, нужно ли активировать щит
 		})
+
+		// Если есть вектор атаки, добавляем его
 		if attacks[i].X != 0 || attacks[i].Y != 0 {
 			req.Transports[i].Attack = attacks[i]
 		}
@@ -27,8 +28,7 @@ func updateCarpets(carpets []Carpet, accelerations []Vector, attacks []Vector, s
 }
 
 // Функция для атаки на соперников с предсказанием и активацией щита
-func attackEnemies(carpet *Carpet, enemies []Carpet, attackRadius float64, wg *sync.WaitGroup, attackResults chan Vector, shieldResults chan bool) {
-	defer wg.Done()
+func attackEnemies(carpet *Carpet, enemies []Carpet, attackRadius float64) (Vector, bool) {
 	attackVector := Vector{X: 0, Y: 0} // По умолчанию атака не происходит
 	activateShield := false            // По умолчанию щит не активируется
 
@@ -43,26 +43,29 @@ func attackEnemies(carpet *Carpet, enemies []Carpet, attackRadius float64, wg *s
 		distance := math.Sqrt(dx*dx + dy*dy)
 
 		// Проверяем, находится ли враг в радиусе атаки
-		if distance <= attackRadius && distance < minDistance {
-			minDistance = distance
-			closestEnemy = &enemy
-		} else {
-			// Предсказание будущей позиции врага через 1 секунду
-			predictedEnemyX := enemy.X + enemy.Velocity.X*1 // Позиция через 1 секунду
-			predictedEnemyY := enemy.Y + enemy.Velocity.Y*1
+		if distance != 0 {
+			if distance <= attackRadius && distance < minDistance {
+				minDistance = distance
+				closestEnemy = &enemy
+			} else {
+				// Предсказание будущей позиции врага через 1 секунду
+				predictedEnemyX := enemy.X + enemy.Velocity.X*1 // Позиция через 1 секунду
+				predictedEnemyY := enemy.Y + enemy.Velocity.Y*1
 
-			// Предсказание вашей позиции через 1 секунду
-			predictedCarpetX := carpet.X + carpet.Velocity.X*1 + carpet.MaxAccel*1 // Позиция через 1 секунду
-			predictedCarpetY := carpet.Y + carpet.Velocity.Y*1 + carpet.MaxAccel*1
+				// Предсказание вашей позиции через 1 секунду
+				predictedCarpetX := carpet.X + carpet.Velocity.X*1 + carpet.MaxAccel*1 // Позиция через 1 секунду
+				predictedCarpetY := carpet.Y + carpet.Velocity.Y*1 + carpet.MaxAccel*1
 
-			// Рассчитываем расстояние до предсказанной позиции врага
-			predictedDx := predictedCarpetX - predictedEnemyX
-			predictedDy := predictedCarpetY - predictedEnemyY
-			predictedDistance := math.Sqrt(predictedDx*predictedDx + predictedDy*predictedDy)
+				// Рассчитываем расстояние до предсказанной позиции врага
+				predictedDx := predictedCarpetX - predictedEnemyX
+				predictedDy := predictedCarpetY - predictedEnemyY
+				predictedDistance := math.Sqrt(predictedDx*predictedDx + predictedDy*predictedDy)
 
-			// Если предсказанная дистанция меньше радиуса атаки, активируем щит
-			if predictedDistance <= attackRadius {
-				activateShield = true
+				// Если предсказанная дистанция меньше радиуса атаки, активируем щит
+				if predictedDistance <= attackRadius {
+					fmt.Println("Sheilde active")
+					activateShield = true
+				}
 			}
 		}
 	}
@@ -84,11 +87,7 @@ func attackEnemies(carpet *Carpet, enemies []Carpet, attackRadius float64, wg *s
 		}
 	}
 
-	// Отправляем вектор атаки в канал
-	attackResults <- attackVector
-
-	// Отправляем результат активации щита в канал
-	shieldResults <- activateShield
+	return attackVector, activateShield
 }
 
 // Функция для расчета ускорения на основе целевой точки
@@ -107,28 +106,53 @@ func calculateAcceleration(carpet *Carpet, targetX, targetY float64) Vector {
 	return Vector{X: 0, Y: 0} // Если находимся на месте, возвращаем нулевое ускорение
 }
 
-// Функция для уклонения от аномалий
-func avoidAnomalies(carpet *Carpet, anomalies []Anomaly, wg *sync.WaitGroup, results chan Vector) {
-	defer wg.Done()
-	var totalAnomalyAcceleration Vector
+// Функция для уклонения от аномалий с учетом их скорости и минимального изменения маршрута
+func avoidAnomalies(carpet *Carpet, anomalies []Anomaly) Vector {
+	totalAvoidance := Vector{X: 0, Y: 0} // Вектор уклонения
 
 	for _, anomaly := range anomalies {
-		distance := math.Sqrt(math.Pow(carpet.X-anomaly.X, 2) + math.Pow(carpet.Y-anomaly.Y, 2))
-		if distance < anomaly.Radius {
-			fmt.Printf("Carpet %s avoiding anomaly at (%f, %f)\n", carpet.ID, anomaly.X, anomaly.Y)
-			// Рассчитываем ускорение для уклонения
-			acceleration := moveAwayFrom(carpet, anomaly.X, anomaly.Y)
-			totalAnomalyAcceleration.X += acceleration.X
-			totalAnomalyAcceleration.Y += acceleration.Y
+		// Рассчитываем текущее расстояние до аномалии
+		dx := carpet.X - anomaly.X
+		dy := carpet.Y - anomaly.Y
+		distance := math.Sqrt(dx*dx + dy*dy)
+
+		// Если аномалия слишком близка, начнем избегать её
+		if distance <= anomaly.Radius+2 { // Например, начинаем избегать за 5 метров до радиуса
+			// Предсказание будущей позиции аномалии через 1 секунду
+			predictedAnomalyX := anomaly.X + anomaly.Velocity.X*1
+			predictedAnomalyY := anomaly.Y + anomaly.Velocity.Y*1
+
+			// Рассчитываем направление к аномалии
+			predictedDx := carpet.X - predictedAnomalyX
+			predictedDy := carpet.Y - predictedAnomalyY
+			predictedDistance := math.Sqrt(predictedDx*predictedDx + predictedDy*predictedDy)
+
+			// Если предсказанное расстояние слишком маленькое, нужно уклониться
+			if predictedDistance < anomaly.Radius {
+				// Рассчитываем вектор уклонения "вбок"
+				sideStepX := -predictedDy // Сдвиг вбок относительно направления аномалии
+				sideStepY := predictedDx  // Это создает перпендикулярный вектор
+
+				// Нормализуем вектор уклонения
+				sideStepDistance := math.Sqrt(sideStepX*sideStepX + sideStepY*sideStepY)
+				if sideStepDistance > 0 {
+					sideStepX /= sideStepDistance
+					sideStepY /= sideStepDistance
+				}
+
+				// Добавляем вектор уклонения с минимальным изменением маршрута
+				avoidanceStrength := 0.5 // Степень отклонения от маршрута
+				totalAvoidance.X += sideStepX * avoidanceStrength
+				totalAvoidance.Y += sideStepY * avoidanceStrength
+			}
 		}
 	}
 
-	results <- totalAnomalyAcceleration // Отправляем результирующее ускорение в канал
+	return totalAvoidance
 }
 
 // Функция для сбора наград
-func collectBounties(carpet *Carpet, bounties []Bounty, wg *sync.WaitGroup, results chan Vector) {
-	defer wg.Done()
+func collectBounties(carpet *Carpet, bounties []Bounty) Vector {
 	var totalSelfAcceleration Vector
 
 	for _, bounty := range bounties {
@@ -140,80 +164,59 @@ func collectBounties(carpet *Carpet, bounties []Bounty, wg *sync.WaitGroup, resu
 			totalSelfAcceleration.Y += acceleration.Y
 		}
 	}
-	fmt.Println(totalSelfAcceleration)
-	if carpet.SelfAcceleration != totalSelfAcceleration {
-		fmt.Print("Changed selfAcceleration")
-	}
-	results <- totalSelfAcceleration // Отправляем результирующее ускорение в канал
-}
 
-// Функция для уклонения от цели
-func moveAwayFrom(carpet *Carpet, targetX, targetY float64) Vector {
-	dx := carpet.X - targetX
-	dy := carpet.Y - targetY
-	distance := math.Sqrt(dx*dx + dy*dy)
-
-	if distance > 0 {
-		// Нормализуем вектор направления
-		dx /= distance
-		dy /= distance
-
-		// Рассчитываем новое ускорение для уклонения
-		acceleration := Vector{
-			X: dx * carpet.MaxAccel, // Умножаем на максимальное ускорение
-			Y: dy * carpet.MaxAccel, // Умножаем на максимальное ускорение
-		}
-		return acceleration
-	}
-	return Vector{X: 0, Y: 0} // Если ковер на месте, возвращаем нулевое ускорение
+	return totalSelfAcceleration
 }
 
 // Функция для управления коврами
-func manageCarpet(carpet *Carpet, bounties []Bounty, anomalies []Anomaly, enemies []Carpet, wg *sync.WaitGroup, results chan Vector, attackResults chan Vector, shields chan bool) {
-	wg.Add(3) // Увеличиваем счетчик горутин для атаки
+func manageCarpet(carpet *Carpet, bounties []Bounty, anomalies []Anomaly, enemies []Carpet) (Vector, Vector, bool) {
+	// Сбор наград
+	bountyVector := collectBounties(carpet, bounties)
 
-	// Горутин для сбора наград
-	go collectBounties(carpet, bounties, wg, results)
+	// Уклонение от аномалий
+	avoidanceVector := avoidAnomalies(carpet, anomalies)
 
-	// Горутин для уклонения от аномалий
-	go avoidAnomalies(carpet, anomalies, wg, results)
+	// Атака на врагов и активация щита
+	attackVector, activateShield := attackEnemies(carpet, enemies, 30.0)
 
-	// Горутин для атаки на соперников
-	go attackEnemies(carpet, enemies, 30.0, wg, attackResults, shields) // Радиус атаки, например, 5 метров
+	// Суммируем оба вектора
+	finalAcceleration := Vector{
+		X: bountyVector.X + avoidanceVector.X,
+		Y: bountyVector.Y + avoidanceVector.Y,
+	}
+
+	// Рассчитываем длину итогового вектора
+	length := math.Sqrt(finalAcceleration.X*finalAcceleration.X + finalAcceleration.Y*finalAcceleration.Y)
+
+	// Если длина вектора больше максимального ускорения, нормализуем вектор
+	if length > carpet.MaxAccel && length > 0 {
+		finalAcceleration.X = (finalAcceleration.X / length) * carpet.MaxAccel
+		finalAcceleration.Y = (finalAcceleration.Y / length) * carpet.MaxAccel
+	}
+
+	return finalAcceleration, attackVector, activateShield
 }
 
 // Основная функция бота
 func runBot(state *MoveResponse) *MoveResponse {
-
-	var wg sync.WaitGroup
-	results := make(chan Vector, len(state.Carpets))       // Канал для ускорений
-	attackResults := make(chan Vector, len(state.Carpets)) // Канал для векторов атак
-
-	shieldResults := make(chan bool, len(state.Carpets)) // Канал для активации щита
-	for _, carpet := range state.Carpets {
-		carpet.MaxAccel = state.MaxAccel
-		manageCarpet(&carpet, state.Bounties, state.Anomalies, state.Carpets, &wg, results, attackResults, shieldResults)
-	}
-
-	wg.Wait()            // Ждем завершения всех горутин
-	close(results)       // Закрываем канал для ускорений
-	close(attackResults) // Закрываем канал для атак
-	close(shieldResults) // Закрываем канал для щитов
-
-	// Сбор итоговых результатов
 	accelerations := make([]Vector, len(state.Carpets))
-	attacks := make([]Vector, len(state.Carpets)) // Список для хранения векторов атак
-	shields := make([]bool, len(state.Carpets))   // Список для хранения состояний щита
+	attacks := make([]Vector, len(state.Carpets))
+	shields := make([]bool, len(state.Carpets))
 
-	for i := range state.Carpets {
-		accelerations[i] = <-results
-		attacks[i] = <-attackResults
-		shields[i] = <-shieldResults
+	for i, carpet := range state.Carpets {
+		carpet.MaxAccel = state.MaxAccel
+
+		// Управление ковром
+		acceleration, attackVector, activateShield := manageCarpet(&carpet, state.Bounties, state.Anomalies, state.Carpets)
+		accelerations[i] = acceleration
+		attacks[i] = attackVector
+		shields[i] = activateShield
 	}
+
 	// Передаем вектора атак и ускорений в функцию sendPlayerCommand
-	res, err := updateCarpets(state.Carpets, accelerations, attacks, shields)
+	req, err := updateCarpets(state.Carpets, accelerations, attacks, shields)
 	if err != nil {
 		fmt.Printf("Error updating carpets: %s\n", err)
 	}
-	return res
+	return req
 }

@@ -24,8 +24,9 @@ type Anomaly struct {
 	ID       string  `json:"id"`
 	X        float64 `json:"x"`
 	Y        float64 `json:"y"`
-	Radius   float64 `json:"radius"`
+	Radius   float64 `json:"effectiveRadius"`
 	Strength float64 `json:"strength"`
+	Velocity Vector  `json:"velocity"`
 }
 
 // Structure for bounties

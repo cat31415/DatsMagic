@@ -29,7 +29,6 @@ func main() {
 			if requests < maxRequests {
 				// Пример команды для одного из ковров
 				state = runBot(state)
-
 				// Сохраняем команду и ответ в JSON
 				commandFilename := fmt.Sprintf("/comands/command_%d.json", counter)
 				if err := saveToJSON(commandFilename, state); err != nil {

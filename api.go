@@ -23,7 +23,7 @@ func sendPlayerCommand(command PlayerCommand) (*MoveResponse, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Auth-Token", "66fbdaf5594c466fbdaf5594c8") // замените на ваш актуальный токен
+	req.Header.Set("X-Auth-Token", "xP8CayL9zqS8Vz") // замените на ваш актуальный токен
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
