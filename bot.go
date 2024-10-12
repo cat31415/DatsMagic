@@ -211,7 +211,7 @@ func runBot(state *MoveResponse) *MoveResponse {
 		shields[i] = <-shieldResults
 	}
 	// Передаем вектора атак и ускорений в функцию sendPlayerCommand
-	res, err := updateCarpets(state.Carpets, accelerations, attacks)
+	res, err := updateCarpets(state.Carpets, accelerations, attacks, shields)
 	if err != nil {
 		fmt.Printf("Error updating carpets: %s\n", err)
 	}
