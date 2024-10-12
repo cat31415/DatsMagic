@@ -3,31 +3,46 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 )
 
 func main() {
-	// Получаем начальное состояние карты и ковров
-	state, err := getInitialState()
+	ticker := time.NewTicker(1 * time.Second / 3) // создаем тикер для выполнения запроса 3 раза в секунду
+	defer ticker.Stop()
+
+	counter := 1
+	state, err := sendPlayerCommand(PlayerCommand{[]TransportCommand{}})
 	if err != nil {
-		log.Fatalf("Ошибка при получении начального состояния: %v", err)
+		fmt.Println("err 429")
 	}
 
-	fmt.Printf("Игрок %s находится на координатах X=%d, Y=%d\n", state.Name, state.X, state.Y)
-	fmt.Printf("Здоровье игрока: %d\n", state.Health)
-	fmt.Println("Доступные транспорты:")
-	for _, transport := range state.Transports {
-		fmt.Printf("Транспорт ID=%s на координатах X=%d, Y=%d, здоровье: %d\n", transport.ID, transport.X, transport.Y, transport.Health)
-	}
-	fmt.Println("Аномалии на карте:")
-	for _, anomaly := range state.Anomalies {
-		fmt.Printf("Аномалия ID=%s на координатах X=%d, Y=%d, радиус: %.2f\n", anomaly.ID, anomaly.X, anomaly.Y, anomaly.Radius)
-	}
-	fmt.Println("Награды на карте:")
-	for _, bounty := range state.Bounties {
-		fmt.Printf("Награда на координатах X=%d, Y=%d, очки: %d\n", bounty.X, bounty.Y, bounty.Points)
-	}
-	fmt.Println("Информация о врагах:")
-	for _, enemy := range state.Enemies {
-		fmt.Printf("Враг на координатах X=%d, Y=%d, здоровье: %d, статус: %s\n", enemy.X, enemy.Y, enemy.Health, enemy.Status)
+	interval := time.Second * 3
+	// Таймер для отсчета времени
+	maxRequests := 8
+	requestTicker := time.NewTicker(375 * time.Millisecond) // Выполняем запросы каждые 0.375 секунды (8 за 3 секунды)
+	intervalTicker := time.NewTicker(interval)
+	defer requestTicker.Stop()
+	defer intervalTicker.Stop()
+	requests := 1
+
+	for {
+		select {
+		case <-requestTicker.C:
+			if requests < maxRequests {
+				// Пример команды для одного из ковров
+				state = runBot(state)
+
+				// Сохраняем команду и ответ в JSON
+				commandFilename := fmt.Sprintf("/comands/command_%d.json", counter)
+				if err := saveToJSON(commandFilename, state); err != nil {
+					log.Printf("Ошибка при сохранении команды в JSON: %v", err)
+				}
+				requests++
+				counter++
+			}
+		case <-intervalTicker.C:
+			// Сброс количества запросов через каждые 3 секунды
+			requests = 0
+		}
 	}
 }

@@ -8,6 +8,42 @@ import (
 	"time"
 )
 
+// Функция для отправки команды на действие
+func sendPlayerCommand(command PlayerCommand) (*MoveResponse, error) {
+	url := "https://games-test.datsteam.dev/play/magcarp/player/move"
+
+	jsonData, err := json.Marshal(command)
+	if err != nil {
+		return nil, fmt.Errorf("Ошибка при кодировании JSON: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("Ошибка при создании запроса: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Auth-Token", "66fbdaf5594c466fbdaf5594c8") // замените на ваш актуальный токен
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Ошибка при выполнении запроса: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Ошибка: статус код %d", resp.StatusCode)
+	}
+
+	var moveResponse MoveResponse
+	if err := json.NewDecoder(resp.Body).Decode(&moveResponse); err != nil {
+		return nil, fmt.Errorf("Ошибка при декодировании ответа: %v", err)
+	}
+
+	return &moveResponse, nil
+}
+
 // Функция для получения информации по карте и коврам
 func getInitialState() (*MoveResponse, error) {
 	url := "https://games-test.datsteam.dev/play/magcarp/player/move" // заменить на актуальный URL
@@ -32,7 +68,7 @@ func getInitialState() (*MoveResponse, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Auth-Token", "66fbdaf5594c466fbdaf5594c8") // замените на актуальный токен
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: time.Second / 3}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка при выполнении запроса: %v", err)

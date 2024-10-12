@@ -6,10 +6,11 @@ type Carpet struct {
 	X                   float64 `json:"x"`
 	Y                   float64 `json:"y"`
 	Health              int     `json:"health"`
-	Velocity            Vector  `json:"velocity"`
-	AnomalyAcceleration Vector  `json:"anomalyAcceleration"`
-	SelfAcceleration    Vector  `json:"selfAcceleration"`
-	Shield              bool    `json:"shield"`
+	MaxAccel            float64
+	Velocity            Vector `json:"velocity"`
+	AnomalyAcceleration Vector `json:"anomalyAcceleration"`
+	SelfAcceleration    Vector `json:"selfAcceleration"`
+	Shield              bool   `json:"shield"`
 }
 
 // Structure for vector representation
@@ -65,6 +66,7 @@ type MoveResponse struct {
 	Bounties  []Bounty   `json:"bounties"`
 	Enemies   []Enemy    `json:"enemies"`
 	MapSize   Coordinate `json:"mapSize"`
+	MaxAccel  float64    `json:"maxAccel"`
 }
 
 type Coordinate struct {
