@@ -38,10 +38,11 @@ type Bounty struct {
 
 // Structure for enemies
 type Enemy struct {
-	X      int    `json:"x"`
-	Y      int    `json:"y"`
-	Health int    `json:"health"`
-	Status string `json:"status"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+	Health   int     `json:"health"`
+	Status   string  `json:"status"`
+	Velocity Vector  `json:"velocity"`
 }
 
 // Структуры для отправки запроса
@@ -58,16 +59,19 @@ type TransportCommand struct {
 
 // Структура для получения ответа (здесь добавь поля, которые ожидаешь получить)
 type MoveResponse struct {
-	Name      string     `json:"name"`
-	X         int        `json:"x"`
-	Y         int        `json:"y"`
-	Health    int        `json:"health"`
-	Carpets   []Carpet   `json:"transports"`
-	Anomalies []Anomaly  `json:"anomalies"`
-	Bounties  []Bounty   `json:"bounties"`
-	Enemies   []Enemy    `json:"enemies"`
-	MapSize   Coordinate `json:"mapSize"`
-	MaxAccel  float64    `json:"maxAccel"`
+	Name                  string     `json:"name"`
+	X                     int        `json:"x"`
+	Y                     int        `json:"y"`
+	Health                int        `json:"health"`
+	Carpets               []Carpet   `json:"transports"`
+	Anomalies             []Anomaly  `json:"anomalies"`
+	Bounties              []Bounty   `json:"bounties"`
+	Enemies               []Enemy    `json:"enemies"`
+	MapSize               Coordinate `json:"mapSize"`
+	MaxAccel              float64    `json:"maxAccel"`
+	AttackExplosionRadius float64    `json:"attackExplosionRadius"`
+	AttackRange           float64    `json:"attackRange"`
+	ReviveTimeoutSec      int        `json:"reviveTimeoutSec"`
 }
 
 type Coordinate struct {

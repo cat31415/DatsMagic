@@ -16,12 +16,10 @@ func sendPlayerCommand(command PlayerCommand) (*MoveResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка при кодировании JSON: %v", err)
 	}
-
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка при создании запроса: %v", err)
 	}
-
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Auth-Token", "xP8CayL9zqS8Vz") // замените на ваш актуальный токен
 
@@ -66,7 +64,7 @@ func getInitialState() (*MoveResponse, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Auth-Token", "66fbdaf5594c466fbdaf5594c8") // замените на актуальный токен
+	req.Header.Set("X-Auth-Token", "xP8CayL9zqS8Vz") // замените на актуальный токен
 
 	client := &http.Client{Timeout: time.Second / 3}
 	resp, err := client.Do(req)

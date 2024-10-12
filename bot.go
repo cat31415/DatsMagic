@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"time"
 )
 
 // Функция для обновления состояния всех ковров
@@ -19,6 +20,7 @@ func updateCarpets(carpets []Carpet, accelerations []Vector, attacks []Vector, s
 
 		// Если есть вектор атаки, добавляем его
 		if attacks[i].X != 0 || attacks[i].Y != 0 {
+
 			req.Transports[i].Attack = attacks[i]
 		}
 	}
@@ -28,63 +30,59 @@ func updateCarpets(carpets []Carpet, accelerations []Vector, attacks []Vector, s
 }
 
 // Функция для атаки на соперников с предсказанием и активацией щита
-func attackEnemies(carpet *Carpet, enemies []Carpet, attackRadius float64) (Vector, bool) {
+func attackEnemies(carpet *Carpet, enemies []Enemy, attackRadius float64) (Vector, bool) {
 	attackVector := Vector{X: 0, Y: 0} // По умолчанию атака не происходит
 	activateShield := false            // По умолчанию щит не активируется
 
-	var closestEnemy *Carpet
-	var minDistance float64 = attackRadius + 1 // Минимальная дистанция для выбора цели
+	var weakestEnemy *Enemy
+	minHealth := 200
 
-	// Поиск ближайшего врага в пределах радиуса атаки
+	// Поиск врага с самым низким здоровьем в пределах радиуса атаки
 	for _, enemy := range enemies {
+		if enemy.Status != "alive" {
+			continue // Игнорируем мертвых врагов
+		}
+
 		// Рассчитываем расстояние до врага
 		dx := carpet.X - enemy.X
 		dy := carpet.Y - enemy.Y
 		distance := math.Sqrt(dx*dx + dy*dy)
 
 		// Проверяем, находится ли враг в радиусе атаки
-		if distance != 0 {
-			if distance <= attackRadius && distance < minDistance {
-				minDistance = distance
-				closestEnemy = &enemy
-			} else {
-				// Предсказание будущей позиции врага через 1 секунду
-				predictedEnemyX := enemy.X + enemy.Velocity.X*1 // Позиция через 1 секунду
-				predictedEnemyY := enemy.Y + enemy.Velocity.Y*1
+		if distance <= attackRadius {
+			// Если здоровье врага меньше текущего минимального
+			if enemy.Health < minHealth {
+				minHealth = enemy.Health
+				weakestEnemy = &enemy // Запоминаем врага с минимальным здоровьем
+			}
+		} else {
+			// Предсказание будущей позиции врага через 1 секунду
+			predictedEnemyX := enemy.X + enemy.Velocity.X*1 // Позиция через 1 секунду
+			predictedEnemyY := enemy.Y + enemy.Velocity.Y*1
 
-				// Предсказание вашей позиции через 1 секунду
-				predictedCarpetX := carpet.X + carpet.Velocity.X*1 + carpet.MaxAccel*1 // Позиция через 1 секунду
-				predictedCarpetY := carpet.Y + carpet.Velocity.Y*1 + carpet.MaxAccel*1
+			// Предсказание вашей позиции через 1 секунду
+			predictedCarpetX := carpet.X + carpet.Velocity.X*1 + carpet.MaxAccel*1 // Позиция через 1 секунду
+			predictedCarpetY := carpet.Y + carpet.Velocity.Y*1 + carpet.MaxAccel*1
 
-				// Рассчитываем расстояние до предсказанной позиции врага
-				predictedDx := predictedCarpetX - predictedEnemyX
-				predictedDy := predictedCarpetY - predictedEnemyY
-				predictedDistance := math.Sqrt(predictedDx*predictedDx + predictedDy*predictedDy)
+			// Рассчитываем расстояние до предсказанной позиции врага
+			predictedDx := predictedCarpetX - predictedEnemyX
+			predictedDy := predictedCarpetY - predictedEnemyY
+			predictedDistance := math.Sqrt(predictedDx*predictedDx + predictedDy*predictedDy)
 
-				// Если предсказанная дистанция меньше радиуса атаки, активируем щит
-				if predictedDistance <= attackRadius {
-					fmt.Println("Sheilde active")
-					activateShield = true
-				}
+			// Если предсказанная дистанция меньше радиуса атаки, активируем щит
+			if predictedDistance <= attackRadius {
+				fmt.Println("Shield active")
+				activateShield = true
 			}
 		}
 	}
 
-	// Если есть ближайший враг, атакуем
-	if closestEnemy != nil {
-		fmt.Printf("Carpet %s attacking enemy %s at distance %.2f\n", carpet.ID, closestEnemy.ID, minDistance)
+	// Если есть враг с минимальным здоровьем, атакуем
+	if weakestEnemy != nil {
+		fmt.Printf("Carpet %s attacking enemy with health %d at distance %.2f\n", carpet.ID, weakestEnemy.Health, minHealth)
 
-		// Рассчитываем вектор атаки в направлении к врагу
-		dx := closestEnemy.X - carpet.X
-		dy := closestEnemy.Y - carpet.Y
-		attackVector = Vector{X: dx, Y: dy}
+		attackVector = Vector{X: weakestEnemy.X, Y: weakestEnemy.Y}
 
-		// Нормализуем вектор атаки (чтобы не зависеть от расстояния)
-		distance := math.Sqrt(dx*dx + dy*dy)
-		if distance > 0 {
-			attackVector.X /= distance
-			attackVector.Y /= distance
-		}
 	}
 
 	return attackVector, activateShield
@@ -169,7 +167,7 @@ func collectBounties(carpet *Carpet, bounties []Bounty) Vector {
 }
 
 // Функция для управления коврами
-func manageCarpet(carpet *Carpet, bounties []Bounty, anomalies []Anomaly, enemies []Carpet) (Vector, Vector, bool) {
+func manageCarpet(carpet *Carpet, bounties []Bounty, anomalies []Anomaly, enemies []Enemy, attackRange int) (Vector, Vector, bool) {
 	// Сбор наград
 	bountyVector := collectBounties(carpet, bounties)
 
@@ -177,7 +175,7 @@ func manageCarpet(carpet *Carpet, bounties []Bounty, anomalies []Anomaly, enemie
 	avoidanceVector := avoidAnomalies(carpet, anomalies)
 
 	// Атака на врагов и активация щита
-	attackVector, activateShield := attackEnemies(carpet, enemies, 30.0)
+	attackVector, activateShield := attackEnemies(carpet, enemies, float64(attackRange))
 
 	// Суммируем оба вектора
 	finalAcceleration := Vector{
@@ -199,6 +197,15 @@ func manageCarpet(carpet *Carpet, bounties []Bounty, anomalies []Anomaly, enemie
 
 // Основная функция бота
 func runBot(state *MoveResponse) *MoveResponse {
+	if state == nil {
+		fmt.Println("state is nil")
+		var err error
+		time.Sleep(time.Second / 3)
+		state, err = getInitialState()
+		if err != nil {
+			fmt.Printf("Error getting initial state: %s\n", err)
+		}
+	}
 	accelerations := make([]Vector, len(state.Carpets))
 	attacks := make([]Vector, len(state.Carpets))
 	shields := make([]bool, len(state.Carpets))
@@ -207,7 +214,7 @@ func runBot(state *MoveResponse) *MoveResponse {
 		carpet.MaxAccel = state.MaxAccel
 
 		// Управление ковром
-		acceleration, attackVector, activateShield := manageCarpet(&carpet, state.Bounties, state.Anomalies, state.Carpets)
+		acceleration, attackVector, activateShield := manageCarpet(&carpet, state.Bounties, state.Anomalies, state.Enemies, 200)
 		accelerations[i] = acceleration
 		attacks[i] = attackVector
 		shields[i] = activateShield

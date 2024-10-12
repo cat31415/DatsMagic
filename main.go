@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -32,7 +31,7 @@ func main() {
 				// Сохраняем команду и ответ в JSON
 				commandFilename := fmt.Sprintf("/comands/command_%d.json", counter)
 				if err := saveToJSON(commandFilename, state); err != nil {
-					log.Printf("Ошибка при сохранении команды в JSON: %v", err)
+
 				}
 				requests++
 				counter++
